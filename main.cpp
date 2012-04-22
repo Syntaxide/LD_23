@@ -20,14 +20,14 @@ void tryMove();
 int px, py;
 int dx,dy;	//pixel offsets for tweening
 float cx,cy;	//camera start in tiles
-enum Direction { RIGHT, DOWN, LEFT, UP };
+enum Direction { RIGHT=0, DOWN, LEFT, UP };
 enum Tile { OPEN, DIRT, ROCK, ELDER, PORTAL, PAD, GATE, ERROR};
 static bool isMoving = false;
 static bool isRunning = false;
 
 //use as a sort of command queue
-enum Key { KRIGHT, KDOWN, KLEFT, KUP};
-static bool keyDown[] = {false, false, false, false};
+enum Key { KRIGHT=0, KDOWN, KLEFT, KUP, KSPACE};
+static bool keyDown[] = {false, false, false, false, false};
 
 bool messageWindow;
 Direction pd;
@@ -38,8 +38,8 @@ vector<SDL_Surface*> images;
 vector<Mix_Chunk*> sounds;
 
 vector<World*> worldstack;
-static bool abilities[] = {false, false, false};
-int pl;	//player level
+static bool abilities[] = {false, false, false, false};
+static int pl=-1;	//player level	-1=menu
 
 struct World{
 	World(){
@@ -221,6 +221,11 @@ void ProcessInput(bool &shouldrun)
 					else
 						shouldrun = false;
 				      break;
+				case SDLK_RETURN:
+				      if(pl == -1)
+					      SetWorld( 0 );
+				      break;
+
 				case SDLK_UP:
 				      keyDown[ KUP ] = true;
 				      break;
@@ -232,6 +237,9 @@ void ProcessInput(bool &shouldrun)
 				      break;
 				case SDLK_LEFT:
 				      keyDown[ KLEFT ] = true;
+				      break;
+				case SDLK_SPACE:
+				      keyDown[ KSPACE ] = true;
 				      break;
 				case SDLK_LSHIFT:
 				case SDLK_RSHIFT:
@@ -249,12 +257,19 @@ void ProcessInput(bool &shouldrun)
 			{
 				case SDLK_UP:
 				      keyDown[ KUP ] = false;
+				      break;
 				case SDLK_DOWN:
 				      keyDown[ KDOWN ] = false;
+				      break;
 				case SDLK_LEFT:
 				      keyDown[ KLEFT ] = false;
+				      break;
 				case SDLK_RIGHT:
 				      keyDown[ KRIGHT ] = false;
+				      break;
+				case SDLK_SPACE:
+				      keyDown[ KSPACE ] = false;
+				      break;
 				case SDLK_LSHIFT:
 				case SDLK_RSHIFT:
 				      isRunning = false;
@@ -280,14 +295,27 @@ void Cleanup()
 void tryMove()
 {
 	int xc=px, yc=py;	//xcandidate, ycandidate
-	if(pd == RIGHT)
-		xc+=1;
-	else if(pd == LEFT)
-		xc-=1;
-	else if(pd == DOWN)
-		yc+=1;
+	if(keyDown[KSPACE]){
+		if(pd == RIGHT)
+			xc+=2;
+		else if(pd == LEFT)
+			xc-=2;
+		else if(pd == DOWN)
+			yc+=2;
+		else
+			yc-=2;
+	}
 	else
-		yc-=1;
+	{
+		if(pd == RIGHT)
+			xc+=1;
+		else if(pd == LEFT)
+			xc-=1;
+		else if(pd == DOWN)
+			yc+=1;
+		else
+			yc-=1;
+	}
 
 	//collision stuff here
 	if( yc >=0 && yc < worldstack[pl]->h && xc >=0 && xc < worldstack[pl]->w)		//bounds check
@@ -298,27 +326,55 @@ void tryMove()
 			case ERROR:
 			case PAD:
 			case PORTAL:
-				if(abilities[0]){	//can move
-					isMoving = true;
+				if(!keyDown[KSPACE])
+				{
+					if(abilities[0]){	//can move
+						isMoving = true;
+					}
+				}
+				else
+				{
+					px = xc;
+					py = yc;
+					keyDown[ KSPACE ] = false;
 				}
 				break;
 			case DIRT:
-				if(abilities[2])
-					isMoving = true;
+				if(!keyDown[KSPACE]){
+
+					if(abilities[2])
+						isMoving = true;
+				}
+				else
+				{
+					px = xc;
+					py = yc;
+					keyDown[ KSPACE ] = false;
+				}
 				break;
 			case ROCK:
 				break;
 			case ELDER:
-				if(!abilities[pl])
+				if(pl != 4)
 				{
-					abilities[pl] = true;
-					Mix_PlayChannel( -1, sounds[0], 0 );
-					if(pl == 0)
-						SetMessage("you've learned to walk!");
-					else if(pl == 1)
-						SetMessage("press shift to run!");
-					else if(pl == 2)
-						SetMessage("you can now move through dirt");
+					if(!abilities[pl])
+					{
+						abilities[pl] = true;
+						Mix_PlayChannel( -1, sounds[0], 0 );
+						if(pl == 0)
+							SetMessage("you've learned to walk!");
+						else if(pl == 1)
+							SetMessage("press shift to run!");
+						else if(pl == 2)
+							SetMessage("you can now move through dirt");
+						else if(pl == 3)
+							SetMessage("You can now teleport using SPACE");
+					}
+				}
+				else
+				{
+					SetMessage("You can walk again. And Good luck. You'll understand later.");
+					abilities[ 0 ] = true;
 				}
 				break;
 			case GATE:
@@ -401,16 +457,20 @@ void Update()
 			}
 		}
 	}
-	else	//can try to move again, assuming no collision
+	if(!isMoving)	//can try to move again, assuming no collision
 	{
 		for(int x=0;x<=KUP;x++)
 		{
 			if(keyDown[x]){
 				pd = (Direction)x;
 				tryMove();
-				if(isMoving)
+				if(isMoving)	//trymove success
 					break;
 			}
+		}
+		if(keyDown[ KSPACE ])
+		{
+			tryMove();
 		}
 	}
 
@@ -508,53 +568,64 @@ void SetMessage( const char *m)
 
 void Draw( )
 {
-	static int walkframe = 0;
 	Clear();
-
-	//draw world
-	
-	//draw each square visible on screen
-	for(int y=-2;y<14;y++)
+	if(pl == -1)
 	{
-		for(int x=-2;x<14;x++)
-		{
-			DrawTile(x,y);
-		}
+
+		DrawText( "Ant in Training", 100, 50, 0,0, 0);
+		DrawText( "Press Enter to Start", 100, 100, 0,0, 0);
+		
+		DrawImage(0, 0, 0);
 	}
-
-
-	/*
-	for(int x=0;x< worldstack[ pl ].w; x++)
+	else
 	{
-		for(int y=0;y<worldstack[pl].h;y++)
+		static int walkframe = 0;
+
+		//draw world
+		
+		//draw each square visible on screen
+		for(int y=-2;y<14;y++)
 		{
-			Uint32 color;
-			if(worldstack[pl].grid[y][x] == false)
-				color = SDL_MapRGB(screen->format, 255,155,155);
-			else
-				color = SDL_MapRGB(screen->format, 0,0,255);
-
-			SDL_Rect r = {(x-cx)*50,(y-cy)*50,50,50};
-			SDL_FillRect(screen, &r, color);
+			for(int x=-2;x<14;x++)
+			{
+				DrawTile(x,y);
+			}
 		}
-	}*/
-
-	//draw player
-	if(walkframe / 30 % 2 == 0 )	//switch every two seconds
-		DrawImage(2*pd+1, (px-cx)*50+dx, (py-cy)*50+dy);
-	else 
-		DrawImage(2*pd+2, (px-cx)*50+dx, (py-cy)*50+dy);
-	if(abilities[0] && isMoving)
-		walkframe++;
 
 
-	//drawMessageWindow
-	if(messageWindow)
-	{
-//		SDL_Rect r = {100,100, 400, 50};
-//		SDL_FillRect( screen, &r, SDL_MapRGB(screen->format, 255,255,255 ) );
-		DrawText( message, 100,100, 0, 0, 0 );
-		DrawText( "esc to dismiss", 100,150, 0, 0, 0 );
+		/*
+		for(int x=0;x< worldstack[ pl ].w; x++)
+		{
+			for(int y=0;y<worldstack[pl].h;y++)
+			{
+				Uint32 color;
+				if(worldstack[pl].grid[y][x] == false)
+					color = SDL_MapRGB(screen->format, 255,155,155);
+				else
+					color = SDL_MapRGB(screen->format, 0,0,255);
+
+				SDL_Rect r = {(x-cx)*50,(y-cy)*50,50,50};
+				SDL_FillRect(screen, &r, color);
+			}
+		}*/
+
+		//draw player
+		if(walkframe / 30 % 2 == 0 )	//switch every two seconds
+			DrawImage(2*pd+1, (px-cx)*50+dx, (py-cy)*50+dy);
+		else 
+			DrawImage(2*pd+2, (px-cx)*50+dx, (py-cy)*50+dy);
+		if(abilities[0] && isMoving)
+			walkframe++;
+
+
+		//drawMessageWindow
+		if(messageWindow)
+		{
+	//		SDL_Rect r = {100,100, 400, 50};
+	//		SDL_FillRect( screen, &r, SDL_MapRGB(screen->format, 255,255,255 ) );
+			DrawText( message, 100,100, 0, 0, 0 );
+			DrawText( "esc to dismiss", 100,150, 0, 0, 0 );
+		}
 	}
 }
 
@@ -565,6 +636,12 @@ void SetWorld(unsigned int layer)
 		px = worldstack[ layer ]->sx;
 		py = worldstack[ layer ]->sy;
 		pl = layer;
+
+		if(pl == 4)
+		{
+			SetMessage("Oof. Your legs feel broken...");
+			abilities[ 0 ] = false;
+		}
 	}
 }
 
@@ -579,8 +656,10 @@ int main(int argc, char **argv)
 	worldstack.push_back( new World("data/level01.png") );
 	worldstack.push_back( new World("data/level02.png") );
 	worldstack.push_back( new World("data/level03.png") );
-	SetWorld( 0 );
-	screen = SDL_SetVideoMode(600,600, 32, SDL_SWSURFACE);
+	worldstack.push_back( new World("data/level04.png") );
+	worldstack.push_back( new World("data/level05.png") );
+
+	screen = SDL_SetVideoMode(600,600, 32, SDL_DOUBLEBUF);
 	if(screen == NULL)
 		cout<<"could not create screen"<<endl;
 	LoadImage( "data/catbtn.png" );	//image 0
@@ -608,13 +687,16 @@ int main(int argc, char **argv)
 
 	Uint32 lastupdate = SDL_GetTicks();
 	const Uint32 upticks = 16;
+
+	SetMessage("Arrowkeys to turn");
 	while( shouldrun )
 	{
 		Uint32 time = SDL_GetTicks();
 		while( time - lastupdate > upticks)
 		{
 			ProcessInput(shouldrun);
-			Update();
+			if(pl != -1)
+				Update();
 			lastupdate += upticks;
 		}
 		Draw();

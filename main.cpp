@@ -16,12 +16,14 @@ struct World;
 void SetWorld(unsigned int layer );
 void SetMessage( const char *m );
 void tryMove();
+void Clear();
 
 int px, py;
 int dx,dy;	//pixel offsets for tweening
 float cx,cy;	//camera start in tiles
 enum Direction { RIGHT=0, DOWN, LEFT, UP };
 enum Tile { OPEN, DIRT, ROCK, ELDER, PORTAL, PAD, GATE, ERROR};
+static SDL_Color color = {0,0,0};	//used for text
 static bool isMoving = false;
 static bool isRunning = false;
 
@@ -38,7 +40,7 @@ vector<SDL_Surface*> images;
 vector<Mix_Chunk*> sounds;
 
 vector<World*> worldstack;
-static bool abilities[] = {false, false, false, false};
+static bool abilities[] = {false, false, false, false, false};
 static int pl=-1;	//player level	-1=menu
 
 struct World{
@@ -48,12 +50,14 @@ struct World{
 		sx = sy = 1;
 		grid = NULL;
 		timeleft = 0;
+		gx = gy = -1;
 		timemax = 0;
 	}
 	World(const char *filename){		//assumed to png images
 		sx = sy = 0;
 		timeleft = 0;
 		timemax = 0;
+		gx = gy = -1;
 		SDL_Surface *img = IMG_Load(filename);
 
 		//image specs
@@ -110,6 +114,7 @@ struct World{
 	}
 	int w,h;
 	int sx, sy;
+	int gx, gy;
 	Tile **grid;
 	int timemax;
 	int timeleft;
@@ -170,7 +175,11 @@ struct World{
 			else if( p == RGB(0,0,0 ) )
 				return ROCK;
 			else if( p == RGB(0,255,255) )
+			{
+				gx = x;
+				gy = y;
 				return GATE;
+			}
 			else
 			{
 				return ERROR;
@@ -241,6 +250,11 @@ void ProcessInput(bool &shouldrun)
 				case SDLK_SPACE:
 				      keyDown[ KSPACE ] = true;
 				      break;
+			        case SDLK_z:
+				      if( abilities[4] )
+					      if(pl > 0)
+						      SetWorld( pl-1 );
+				      break;
 				case SDLK_LSHIFT:
 				case SDLK_RSHIFT:
 				      if(abilities[1])
@@ -284,12 +298,16 @@ void ProcessInput(bool &shouldrun)
 
 void Cleanup()
 {
+	SDL_WM_IconifyWindow();	//hide window while unloading assets, then close
+	SDL_Flip( screen );
+
 	for(unsigned int x=0;x<images.size();x++)
 		SDL_FreeSurface(images[x]);
 	for(unsigned int x=0;x<worldstack.size();x++)
 		delete worldstack[ x ];
 	for(unsigned int x=0;x<sounds.size();x++)
 		Mix_FreeChunk( sounds[ x ] );
+	delete[] message;
 }
 
 void tryMove()
@@ -355,7 +373,7 @@ void tryMove()
 			case ROCK:
 				break;
 			case ELDER:
-				if(pl != 4)
+				if(pl != 4 && pl != 5)
 				{
 					if(!abilities[pl])
 					{
@@ -371,10 +389,15 @@ void tryMove()
 							SetMessage("You can now teleport using SPACE");
 					}
 				}
-				else
+				else if(pl == 4)
 				{
 					SetMessage("You can walk again. And Good luck. You'll understand later.");
 					abilities[ 0 ] = true;
+				}
+				else if(pl == 5)
+				{
+					SetMessage("You can now go up levels. Press z to to teleport");
+					abilities[ 4 ] = true;
 				}
 				break;
 			case GATE:
@@ -468,7 +491,7 @@ void Update()
 					break;
 			}
 		}
-		if(keyDown[ KSPACE ])
+		if(keyDown[ KSPACE ] && abilities[3] )
 		{
 			tryMove();
 		}
@@ -495,49 +518,54 @@ void Clear()
 	SDL_FillRect( screen, NULL, SDL_MapRGB( screen->format, 100, 100, 100 ) );
 }
 
-void DrawTile(int x, int y)	//these represent tile coords on screen
+void DrawTile(int x, int y, bool gatepass)	//these represent tile coords on screen
 {
 	Uint32 color;
 	int imgindex = -1;
 	int wx = cx + x;	//represent coords in grid
 	int wy = cy + y;
-	if( wx >= 0 && wx < worldstack[pl]->w && wy >= 0 && wy < worldstack[pl]->h)	//inbound
+	if(gatepass && x != -1){		//only item being drawn is gate, and is actually on level
+	}
+
+	else	//draw everything else
 	{
-		switch(worldstack[pl]->grid[wy][wx]){
-			case OPEN:
-				imgindex = 9;
-				break;
-			case ELDER:
-				imgindex = 13;
-				break;
-			case DIRT:
-				imgindex = 10;
-				break;
-			case PORTAL:
-				imgindex = 11;
-				break;
-			case PAD:
-				imgindex = 14;
-				break;
-			case ROCK:
-				imgindex = 12;
-				break;
-			case GATE:
-				if(worldstack[pl]->timeleft == 0)
-					imgindex = 16;
-				else
-					imgindex = 15;
+		if( wx >= 0 && wx < worldstack[pl]->w && wy >= 0 && wy < worldstack[pl]->h)	//inbounds
+		{
+			switch(worldstack[pl]->grid[wy][wx]){
+				case OPEN:
+					imgindex = 9;
+					break;
+				case ELDER:
+					imgindex = 13;
+					break;
+				case DIRT:
+					imgindex = 10;
+					break;
+				case PORTAL:
+					imgindex = 11;
+					break;
+				case PAD:
+					imgindex = 14;
+					break;
+				case ROCK:
+					imgindex = 12;
+					break;
+				case GATE:	//now drawn in gatepass case above
+					if(worldstack[pl]->timeleft == 0)
+						imgindex = 16;
+					else
+						imgindex = 15;
+					break;
+				default:
+					color = SDL_MapRGB(screen->format, 0,0,0);
+			}
+			SDL_Rect r = {(wx-cx)*50,(wy-cy)*50,50,50};
+			if(imgindex != -1)
+				DrawImage(imgindex, r.x, r.y);
+			else
+				SDL_FillRect(screen, &r, color);
 
-				break;
-			default:
-				color = SDL_MapRGB(screen->format, 0,0,0);
 		}
-		SDL_Rect r = {(wx-cx)*50,(wy-cy)*50,50,50};
-		if(imgindex != -1)
-			DrawImage(imgindex, r.x, r.y);
-		else
-			SDL_FillRect(screen, &r, color);
-
 	}
 
 }
@@ -571,9 +599,8 @@ void Draw( )
 	Clear();
 	if(pl == -1)
 	{
-
-		DrawText( "Ant in Training", 100, 50, 0,0, 0);
-		DrawText( "Press Enter to Start", 100, 100, 0,0, 0);
+		DrawText( "Ant in Training", 100, 50, color.r,color.g, color.b);
+		DrawText( "Press Enter to Start", 100, 100, color.r,color.g, color.b);
 		
 		DrawImage(0, 0, 0);
 	}
@@ -583,12 +610,12 @@ void Draw( )
 
 		//draw world
 		
-		//draw each square visible on screen
-		for(int y=-2;y<14;y++)
+		//draw each square visible on screen, other than gate
+		for(int y=-1;y<13;y++)
 		{
-			for(int x=-2;x<14;x++)
+			for(int x=-1;x<13;x++)
 			{
-				DrawTile(x,y);
+				DrawTile(x,y,false);
 			}
 		}
 
@@ -618,13 +645,17 @@ void Draw( )
 			walkframe++;
 
 
+		//now draw gate
+		DrawTile( worldstack[ pl ]->gx, worldstack[pl]->gy, true);
+
+
 		//drawMessageWindow
 		if(messageWindow)
 		{
 	//		SDL_Rect r = {100,100, 400, 50};
 	//		SDL_FillRect( screen, &r, SDL_MapRGB(screen->format, 255,255,255 ) );
-			DrawText( message, 100,100, 0, 0, 0 );
-			DrawText( "esc to dismiss", 100,150, 0, 0, 0 );
+			DrawText( message, 100,50, color.r, color.g, color.b );
+			DrawText( "esc to dismiss", 100,100, color.r, color.g, color.b );
 		}
 	}
 }
@@ -637,7 +668,7 @@ void SetWorld(unsigned int layer)
 		py = worldstack[ layer ]->sy;
 		pl = layer;
 
-		if(pl == 4)
+		if(pl == 4 && !abilities[4])	//dont break legs on returning
 		{
 			SetMessage("Oof. Your legs feel broken...");
 			abilities[ 0 ] = false;
@@ -649,7 +680,7 @@ int main(int argc, char **argv)
 {
 	SDL_Init( SDL_INIT_EVERYTHING );
 	TTF_Init();
-	font = TTF_OpenFont( "data/foo.ttf", 28 );
+	font = TTF_OpenFont( "data/foo.ttf", 20 );
 	if(font == NULL)
 		cout<<"unable to load font"<<endl;
 	Mix_OpenAudio( 22050, MIX_DEFAULT_FORMAT, 2, 4096 );
@@ -658,6 +689,7 @@ int main(int argc, char **argv)
 	worldstack.push_back( new World("data/level03.png") );
 	worldstack.push_back( new World("data/level04.png") );
 	worldstack.push_back( new World("data/level05.png") );
+	worldstack.push_back( new World("data/level06.png") );
 
 	screen = SDL_SetVideoMode(600,600, 32, SDL_DOUBLEBUF);
 	if(screen == NULL)

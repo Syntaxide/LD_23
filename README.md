@@ -6,8 +6,8 @@ Ant in Training is my submission to LudumDare 23. LudumDare is a 48 hour game pr
 
 
 Technologies used:
-C++ ( perhaps an unusual choice for this challenge, but it is the language most familiar to me )
-SDL 
-PNG ( used drawing images, and as my map import/export format )
+C++ ( perhaps an unusual choice for this challenge, but it is the language most familiar to me )  
+SDL  
+PNG ( used drawing images, and as my map import/export format )  
 
-Licensed under the GNU Public Licence v3
+Licensed under the GNU Public Licence v3  

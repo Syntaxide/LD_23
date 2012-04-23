@@ -276,11 +276,13 @@ void ProcessInput(bool &shouldrun)
 				case SDLK_SPACE:
 				      keyDown[ KSPACE ] = true;
 				      break;
-			        case SDLK_z:
-				      if( abilities[4] )
-					      if(pl > 0)
-						      SetWorld( pl-1 );
-				      break;
+				case SDLK_z:
+				  if( abilities[4] )
+				  {
+					  if(pl > 0)
+						  SetWorld( pl-1 );
+				  }
+				  break;
 				case SDLK_LSHIFT:
 				case SDLK_RSHIFT:
 				      if(abilities[1])
@@ -339,7 +341,7 @@ void Cleanup()
 void tryMove()
 {
 	int xc=px, yc=py;	//xcandidate, ycandidate
-	if(keyDown[KSPACE]){
+	if(abilities[3] &&keyDown[KSPACE]){
 		if(pd == RIGHT)
 			xc+=2;
 		else if(pd == LEFT)
@@ -351,14 +353,14 @@ void tryMove()
 	}
 	else
 	{
-		if(pd == RIGHT)
-			xc+=1;
-		else if(pd == LEFT)
-			xc-=1;
-		else if(pd == DOWN)
-			yc+=1;
-		else
-			yc-=1;
+			if(pd == RIGHT)
+				xc+=1;
+			else if(pd == LEFT)
+				xc-=1;
+			else if(pd == DOWN)
+				yc+=1;
+			else
+				yc-=1;
 	}
 
 	//collision stuff here
@@ -397,8 +399,7 @@ void tryMove()
 				break;
 			case DIRT:
 				if(!keyDown[KSPACE]){
-
-					if(abilities[2])
+					if(abilities[0] && abilities[2])
 						isMoving = true;
 				}
 				else
@@ -725,6 +726,11 @@ void Draw( )
 
 void SetWorld(unsigned int layer)
 {
+	for(int x=0;x<5;x++)
+		keyDown[ x ] = false;
+	isMoving = false;
+	dx = 0;
+	dy = 0;
 	if(layer >= 0 && layer < worldstack.size())
 	{
 		px = worldstack[ layer ]->sx;
@@ -742,8 +748,9 @@ void SetWorld(unsigned int layer)
 int main(int argc, char **argv)
 {
 	SDL_Init( SDL_INIT_EVERYTHING );
+	SDL_WM_SetCaption("Ant in Training", NULL);
 	TTF_Init();
-	font = TTF_OpenFont( "data/foo.ttf", 20 );
+	font = TTF_OpenFont( "data/foo.ttf", 15 );
 	if(font == NULL)
 		cout<<"unable to load font"<<endl;
 	Mix_OpenAudio( 22050, MIX_DEFAULT_FORMAT, 2, 4096 );

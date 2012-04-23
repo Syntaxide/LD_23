@@ -22,7 +22,7 @@ int px, py;
 int dx,dy;	//pixel offsets for tweening
 float cx,cy;	//camera start in tiles
 enum Direction { RIGHT=0, DOWN, LEFT, UP };
-enum Tile { OPEN, DIRT, ROCK, ELDER, PORTAL, PAD, GATE, ERROR};
+enum Tile { OPEN, DIRT, ROCK, ELDER, PORTAL, PAD, GATE, CAT, STAR, ERROR};
 static SDL_Color color = {0,0,0};	//used for text
 static bool isMoving = false;
 static bool isRunning = false;
@@ -32,6 +32,7 @@ enum Key { KRIGHT=0, KDOWN, KLEFT, KUP, KSPACE};
 static bool keyDown[] = {false, false, false, false, false};
 
 bool messageWindow;
+static bool won = false;
 Direction pd;
 TTF_Font *font = NULL;
 SDL_Surface *screen;
@@ -41,6 +42,7 @@ vector<Mix_Chunk*> sounds;
 
 vector<World*> worldstack;
 static bool abilities[] = {false, false, false, false, false};
+static bool cats[] = { false, false, false, false, false, false };
 static int pl=-1;	//player level	-1=menu
 
 struct World{
@@ -180,12 +182,36 @@ struct World{
 				gy = y;
 				return GATE;
 			}
+			else if( p == RGB(100,100,100) )
+			{
+				return CAT;
+			}
+			else if( p == RGB(100,0,0) )
+			{
+				return STAR;
+			}
 			else
 			{
 				return ERROR;
 			}
 		}
 };
+
+
+void FindCat( int layer )
+{
+	cats[ layer ] = true;
+	bool foundall = true;
+	for(int x=0;x<6;x++)
+		if(! cats[x])
+			foundall = false;
+	if(foundall)
+	{
+		SetMessage("You sense a disturbance...");
+		worldstack[3]->grid[26][42] = OPEN;
+	}
+}
+
 
 
 void LoadImage( const char *string )
@@ -340,6 +366,16 @@ void tryMove()
 	{
 		switch( worldstack[pl]->grid[yc][xc] )
 		{
+			case CAT:
+				worldstack[pl]->grid[yc][xc] = OPEN;
+				FindCat( pl );
+			case STAR:
+				//prevent flow
+				if( worldstack[pl]->grid[yc][xc] == STAR ){
+					if(!won)
+						SetMessage("YOU WIN!");
+					won = true;
+				}
 			case OPEN:
 			case ERROR:
 			case PAD:
@@ -356,6 +392,8 @@ void tryMove()
 					py = yc;
 					keyDown[ KSPACE ] = false;
 				}
+
+				
 				break;
 			case DIRT:
 				if(!keyDown[KSPACE]){
@@ -547,8 +585,33 @@ void DrawTile(int x, int y, bool gatepass)	//these represent tile coords on scre
 				case PAD:
 					imgindex = 14;
 					break;
+				case STAR:
+					imgindex = 18;
+					break;
 				case ROCK:
 					imgindex = 12;
+					if( pl == 3 )
+					{
+						if(wy == 21)
+						{
+							if(wx == 37 && cats[0])
+								imgindex = 17;
+							else if(wx == 39 && cats[1])
+								imgindex = 17;
+							else if(wx == 41 && cats[2])
+								imgindex = 17;
+							else if(wx == 43 && cats[3])
+								imgindex = 17;
+							else if(wx == 45 && cats[4])
+								imgindex = 17;
+							else if(wx == 47 && cats[5])
+								imgindex = 17;
+						}
+					}
+
+					break;
+				case CAT:
+					imgindex = 17;
 					break;
 				case GATE:	//now drawn in gatepass case above
 					if(worldstack[pl]->timeleft == 0)
@@ -711,6 +774,8 @@ int main(int argc, char **argv)
 	LoadImage( "data/pad.png" );	
 	LoadImage( "data/gateopen.png" );	
 	LoadImage( "data/gateclosed.png" );	
+	LoadImage( "data/cattrophy.png" );	//17
+	LoadImage( "data/star.png" );	//17
 
 	LoadSound( "data/sound.wav" );	//sound 0
 
